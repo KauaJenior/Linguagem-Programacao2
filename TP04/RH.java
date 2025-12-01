@@ -2,30 +2,51 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.*;
+import java.util.ArrayList;
 import javax.swing.*;
+
+class Funcionario {
+    String nome;
+    double salario;
+    int cargo;
+
+    Funcionario(String nome, double salario, int cargo) {
+        this.nome = nome;
+        this.salario = salario;
+        this.cargo = cargo;
+    }
+}
 
 public class RH {
 
     private static JTextField txtnome;
     private static JTextField txtSalario;
     private static JTextField cargotxt;
-    private static ResultSet resultSet;
-    private static int currentIndex = -1;
+
+    private static ArrayList<Funcionario> lista = new ArrayList<>();
+    private static int currentIndex = 0;
 
     public static void main(String[] args) {
+
+        Connection conn = null;
+        try {
+            conn = DatabaseConnection.getConnection();
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Erro ao conectar ao banco!");
+            return;
+        }
+
         JFrame frame = new JFrame("TRABALHO PRATICO 04");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400,200);
-
+        frame.setSize(400, 220);
         frame.setLayout(new BorderLayout());
 
-        JPanel panelSuperior = new JPanel();
-        panelSuperior.setLayout(new FlowLayout(FlowLayout.LEFT));
+        JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
         JLabel labelNome = new JLabel("Nome:");
         panelSuperior.add(labelNome);
 
-        JTextField textFieldNome = new JTextField(20); // Campo para digitar o nome
+        JTextField textFieldNome = new JTextField(20);
         panelSuperior.add(textFieldNome);
 
         JButton buttonPesquisar = new JButton("Pesquisar");
@@ -33,120 +54,91 @@ public class RH {
 
         frame.add(panelSuperior, BorderLayout.NORTH);
 
-        JPanel panelInferior = new JPanel();
-        panelInferior.setLayout(new GridLayout(4,2,5,5));
+        // ---------------- CAMPOS ----------------
+        JPanel panelInferior = new JPanel(new GridLayout(4, 2, 5, 5));
 
-        JLabel nomelabel = new JLabel("Nome:");
-        panelInferior.add(nomelabel);
-
-        // Inicializando os campos de texto para mostrar os resultados
+        panelInferior.add(new JLabel("Nome:"));
         txtnome = new JTextField(20);
         panelInferior.add(txtnome);
 
-        JLabel salariolabel = new JLabel("Salário:");
-        panelInferior.add(salariolabel);
-
+        panelInferior.add(new JLabel("Salário:"));
         txtSalario = new JTextField(20);
         panelInferior.add(txtSalario);
 
-        JLabel cargolabel = new JLabel("Cargo:");
-        panelInferior.add(cargolabel);
-
+        panelInferior.add(new JLabel("Cargo:"));
         cargotxt = new JTextField(20);
         panelInferior.add(cargotxt);
 
         JButton btnAnterior = new JButton("Anterior");
         panelInferior.add(btnAnterior);
 
-        JButton btnProx = new JButton("Próximo");
-        panelInferior.add(btnProx);
+        JButton btnProximo = new JButton("Próximo");
+        panelInferior.add(btnProximo);
 
         frame.add(panelInferior, BorderLayout.CENTER);
 
-        frame.setVisible(true);
+        // ---------------- PESQUISAR ----------------
+        Connection finalConn = conn;
+        buttonPesquisar.addActionListener(e -> {
 
-        // Estabelecendo a conexão com o banco de dados
-        try (Connection conn = DatabaseConnection.getConnection()) {
+            String nomePesq = textFieldNome.getText().trim();
 
-            // Ação do botão "Pesquisar"
-            buttonPesquisar.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) {
-                    String nomePesquisado = textFieldNome.getText().trim();  // Remove espaços extras
+            if (nomePesq.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Digite um nome para pesquisar.");
+                return;
+            }
 
-                    if (nomePesquisado.isEmpty()) {
-                        JOptionPane.showMessageDialog(frame, "Por favor, insira um nome para pesquisa.");
-                        return;
-                    }
+            lista.clear(); 
 
-                    System.out.println("Pesquisando por: " + nomePesquisado); // Para depuração
+            try {
+                String sql = "SELECT * FROM tbfuncs WHERE nome_func LIKE ?";
+                PreparedStatement stmt = finalConn.prepareStatement(sql);
+                stmt.setString(1, "%" + nomePesq + "%");
 
-                    try {
-                        // Consulta SQL para buscar o nome
-                        String sql = "SELECT * FROM tbfuncs WHERE nome_func LIKE ?";
-                        PreparedStatement stmt = conn.prepareStatement(sql);
-                        stmt.setString(1, "%" + nomePesquisado + "%");  // LIKE para busca parcial
-                        resultSet = stmt.executeQuery();
+                ResultSet rs = stmt.executeQuery();
 
-                        // Se houver resultados, configurar o primeiro funcionário
-                        if (resultSet.next()) {
-                            currentIndex = 0;
-                            updateUI();
-                        } else {
-                            JOptionPane.showMessageDialog(frame, "Nenhum funcionário encontrado.");
-                        }
-                    } catch (SQLException ex) {
-                        ex.printStackTrace();
-                    }
+                while (rs.next()) {
+                    lista.add(new Funcionario(
+                            rs.getString("nome_func"),
+                            rs.getDouble("sal_func"),
+                            rs.getInt("cod_cargo")
+                    ));
                 }
-            });
 
-            // Ação do botão "Próximo"
-            btnProx.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) {
-                    try {
-                        if (resultSet != null && resultSet.next()) {
-                            currentIndex++;
-                            updateUI();
-                        }
-                    } catch (SQLException ex) {
-                        ex.printStackTrace();
-                    }
+                if (lista.isEmpty()) {
+                    JOptionPane.showMessageDialog(frame, "Nenhum funcionário encontrado.");
+                    return;
                 }
-            });
 
-            // Ação do botão "Anterior"
-            btnAnterior.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) {
-                    try {
-                        if (resultSet != null && resultSet.previous()) {
-                            currentIndex--;
-                            updateUI();
-                        }
-                    } catch (SQLException ex) {
-                        ex.printStackTrace();
-                    }
-                }
-            });
+                currentIndex = 0;
+                atualizarCampos();
 
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        btnProximo.addActionListener(e -> {
+            if (!lista.isEmpty() && currentIndex < lista.size() - 1) {
+                currentIndex++;
+                atualizarCampos();
+            }
+        });
+
+        btnAnterior.addActionListener(e -> {
+            if (!lista.isEmpty() && currentIndex > 0) {
+                currentIndex--;
+                atualizarCampos();
+            }
+        });
 
         frame.setVisible(true);
     }
 
-    // Método para atualizar a interface com os dados do resultSet
-    private static void updateUI() throws SQLException {
-        if (resultSet != null) {
-            // Atualize os campos com os dados do resultSet
-            String nome = resultSet.getString("nome_func");
-            double salario = resultSet.getDouble("sal_func");
-            int cargoId = resultSet.getInt("cod_cargo");
-
-            // Defina esses valores nos campos de texto
-            txtnome.setText(nome);
-            txtSalario.setText(String.valueOf(salario));
-            cargotxt.setText(String.valueOf(cargoId)); // Aqui você pode fazer a tradução do cargo se necessário
-        }
+    private static void atualizarCampos() {
+        Funcionario f = lista.get(currentIndex);
+        txtnome.setText(f.nome);
+        txtSalario.setText(String.valueOf(f.salario));
+        cargotxt.setText(String.valueOf(f.cargo));
     }
 }
